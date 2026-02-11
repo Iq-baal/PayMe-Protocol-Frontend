@@ -74,12 +74,20 @@ const SendFlow: React.FC<SendFlowProps> = ({ onClose, onSuccess, selectedCurrenc
   useEffect(() => {
     if (!user) return;
     const fetchBalance = async () => {
-        const response = await apiClient.getBalance(user.id);
+        const response = await apiClient.getBalance();
         if (response.success && response.data) {
-            setCurrentBalance(response.data.balance);
+            // Handle both response formats
+            const balanceValue = typeof response.data.balance === 'object' 
+              ? response.data.balance.balance 
+              : response.data.balance;
+            setCurrentBalance(balanceValue || 0);
         }
     };
     fetchBalance();
+    
+    // Poll balance every 5 seconds for real-time updates
+    const intervalId = setInterval(fetchBalance, 5000);
+    return () => clearInterval(intervalId);
   }, [user]);
 
   // Fetch Suggestions - Mock users for now
@@ -732,18 +740,43 @@ const SendFlow: React.FC<SendFlowProps> = ({ onClose, onSuccess, selectedCurrenc
   );
 
   const renderSuccess = () => (
-      <div className="flex flex-col items-center justify-center h-full animate-slide-up text-center">
-          <div className="w-24 h-24 rounded-full bg-green-500 flex items-center justify-center mb-6 shadow-2xl shadow-green-500/40 animate-bounce">
-              <CheckCircle2 size={48} className="text-white" />
+      <div className="flex flex-col items-center justify-center h-full animate-slide-up text-center px-6">
+          {/* Animated Success Icon with Pulse Effect */}
+          <div className="relative mb-8">
+              {/* Outer pulse rings */}
+              <div className="absolute inset-0 w-24 h-24 rounded-full bg-green-500/20 animate-ping"></div>
+              <div className="absolute inset-0 w-24 h-24 rounded-full bg-green-500/30 animate-pulse"></div>
+              
+              {/* Main icon */}
+              <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shadow-2xl shadow-green-500/50 animate-bounce">
+                  <CheckCircle2 size={48} className="text-white" />
+              </div>
           </div>
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Sent!</h2>
-          <p className="text-gray-500 dark:text-white/50 mb-8">
-              You sent <span className="font-bold text-gray-900 dark:text-white">{inputInBaseCurrency ? '$' : selectedCurrency.symbol}{amount}</span> to {recipientProfile?.full_name}.
+          
+          {/* Success Message */}
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-3 animate-fade-in">
+              Payment Sent! 🎉
+          </h2>
+          
+          <p className="text-gray-500 dark:text-white/50 mb-2 text-lg">
+              You sent <span className="font-bold text-green-600 dark:text-green-400">{inputInBaseCurrency ? '$' : selectedCurrency.symbol}{amount}</span>
           </p>
+          
+          <p className="text-gray-400 dark:text-white/40 mb-8">
+              to <span className="font-semibold text-gray-900 dark:text-white">{recipientProfile?.full_name}</span>
+          </p>
+          
+          {/* Transaction Details Card */}
+          <div className="w-full max-w-sm bg-white dark:bg-white/5 rounded-2xl p-4 mb-8 border border-gray-100 dark:border-white/10">
+              <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-500 dark:text-white/50">Status</span>
+                  <span className="text-green-600 dark:text-green-400 font-semibold">Completed</span>
+              </div>
+          </div>
           
           <button 
             onClick={onClose}
-            className="px-12 py-4 rounded-full bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white font-bold hover:bg-gray-200 dark:hover:bg-white/20 transition-colors"
+            className="px-12 py-4 rounded-full bg-gradient-to-r from-green-500 to-green-600 text-white font-bold hover:from-green-600 hover:to-green-700 transition-all shadow-lg shadow-green-500/30 active:scale-95"
           >
               Done
           </button>

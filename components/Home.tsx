@@ -38,9 +38,13 @@ const Home: React.FC<HomeProps> = ({
     if (!user) return;
     
     try {
-      const response = await apiClient.getBalance(user.id);
+      const response = await apiClient.getBalance();
       if (response.success && response.data) {
-        setBalance(response.data.balance);
+        // Handle both response formats
+        const balanceValue = typeof response.data.balance === 'object' 
+          ? response.data.balance.balance 
+          : response.data.balance;
+        setBalance(balanceValue || 0);
       }
     } catch (error) {
       console.error('Failed to fetch balance:', error);
@@ -61,8 +65,21 @@ const Home: React.FC<HomeProps> = ({
       fetchBalance();
   }, [refreshTrigger, user]);
 
-  // Realtime updates will be added when AWS backend supports WebSockets
-  // For now, balance updates on manual refresh and after transactions
+  // Real-time balance polling - update every 5 seconds
+  useEffect(() => {
+    if (!user) return;
+    
+    // Initial fetch
+    fetchBalance();
+    
+    // Set up polling interval
+    const intervalId = setInterval(() => {
+      fetchBalance();
+    }, 5000); // Poll every 5 seconds
+    
+    // Cleanup on unmount
+    return () => clearInterval(intervalId);
+  }, [user]);
 
   const isBalanceLoading = balance === undefined;
 
