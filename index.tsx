@@ -13,18 +13,19 @@ logger.log('Initializing PayMe app');
 
 const root = ReactDOM.createRoot(rootElement);
 
-// Service Worker Registration for PWA
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then(registration => {
-        logger.log('ServiceWorker registration successful with scope:', registration.scope);
-      })
-      .catch(err => {
-        logger.error('ServiceWorker registration failed:', err);
-      });
-  });
-}
+// Service Worker disabled temporarily for debugging
+// TODO: Re-enable after fixing PWA issues
+// if ('serviceWorker' in navigator) {
+//   window.addEventListener('load', () => {
+//     navigator.serviceWorker.register('/sw.js')
+//       .then(registration => {
+//         logger.log('ServiceWorker registration successful with scope:', registration.scope);
+//       })
+//       .catch(err => {
+//         logger.error('ServiceWorker registration failed:', err);
+//       });
+//   });
+// }
 
 root.render(
   <React.StrictMode>

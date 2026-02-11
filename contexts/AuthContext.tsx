@@ -35,19 +35,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
       
-      // Fetch user profile from backend
+      // Try to fetch user profile from backend
       const response = await apiClient.getProfile();
       
       if (response.success && response.data) {
         setUser(response.data);
       } else {
-        // Token invalid, clear it
-        localStorage.removeItem('sessionToken');
-        setUser(null);
+        // If profile fetch fails, check if we have userId in localStorage
+        // This handles the case where user registered but hasn't claimed username
+        const userId = localStorage.getItem('userId');
+        const email = localStorage.getItem('email');
+        
+        if (userId && email) {
+          // Create minimal user profile for users without username
+          const tempUser: UserProfile = {
+            userId,
+            email,
+            username: '', // No username claimed yet
+            walletAddress: '',
+            balance: 0,
+            createdAt: Date.now(),
+          };
+          setUser(tempUser);
+        } else {
+          // Token invalid or no user data, clear everything
+          localStorage.removeItem('sessionToken');
+          localStorage.removeItem('userId');
+          localStorage.removeItem('email');
+          setUser(null);
+        }
       }
     } catch (err) {
       logger.error('Auth check failed', err);
-      setUser(null);
+      
+      // On error, try to recover from localStorage
+      const userId = localStorage.getItem('userId');
+      const email = localStorage.getItem('email');
+      
+      if (userId && email) {
+        const tempUser: UserProfile = {
+          userId,
+          email,
+          username: '',
+          walletAddress: '',
+          balance: 0,
+          createdAt: Date.now(),
+        };
+        setUser(tempUser);
+      } else {
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -66,13 +103,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         apiClient.setAuthToken(response.data.sessionToken);
       }
       
-      // Set user profile
-      if (response.data.user) {
-        setUser(response.data.user);
-      } else {
-        // Fetch profile if not included in login response
-        await refreshProfile();
-      }
+      // Store userId and email for recovery
+      localStorage.setItem('userId', response.data.userId);
+      localStorage.setItem('email', response.data.email);
+      
+      // Create user profile from login response
+      // Login returns: userId, email, username (null if not claimed), tokens
+      const userProfile: UserProfile = {
+        userId: response.data.userId,
+        email: response.data.email,
+        username: response.data.username || '', // Empty string if not claimed
+        walletAddress: response.data.walletAddress || '',
+        balance: response.data.balance || 0,
+        createdAt: response.data.createdAt || Date.now(),
+      };
+      
+      setUser(userProfile);
       
       return { error: null };
     } catch (err: any) {
@@ -93,6 +139,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (response.data.sessionToken) {
         apiClient.setAuthToken(response.data.sessionToken);
       }
+      
+      // Store userId and email for recovery
+      localStorage.setItem('userId', response.data.userId);
+      localStorage.setItem('email', response.data.email || email);
       
       // Create a minimal user profile from registration response
       // Username will be set later via claimUsername
@@ -136,6 +186,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await apiClient.logout();
       apiClient.clearAuthToken();
+      localStorage.removeItem('userId');
+      localStorage.removeItem('email');
       setUser(null);
       logger.log('User signed out');
     } catch (err) {
