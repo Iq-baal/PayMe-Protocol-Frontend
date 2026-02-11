@@ -1,0 +1,7 @@
+{
+  "name": "PayMe Protocol",
+  "description": "A glossy, mobile-first crypto super app hiding blockchain complexity behind a beautiful iOS-style interface.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

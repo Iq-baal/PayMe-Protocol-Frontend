@@ -1,0 +1,183 @@
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { supabase } from '../supabaseClient';
+import { UserProfile } from '../types';
+import bcrypt from 'bcryptjs';
+
+interface AuthContextType {
+  session: boolean; 
+  user: UserProfile | null;
+  loading: boolean;
+  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string) => Promise<{ error: string | null }>;
+  signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
+  updateProfile: (updates: Partial<UserProfile>) => Promise<{ error: string | null }>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Load user from localStorage on boot
+  useEffect(() => {
+      const storedId = localStorage.getItem('payme_user_id');
+      if (storedId) {
+          fetchProfile(storedId);
+      } else {
+          setLoading(false);
+      }
+  }, []);
+
+  const fetchProfile = async (userId: string) => {
+    if (!supabase) return;
+    try {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
+        
+        if (data && !error) {
+            setUser({
+                id: data.id,
+                email: data.email,
+                username: data.username,
+                full_name: data.full_name,
+                avatar_url: data.avatar_url,
+                occupation: data.occupation,
+                is_2fa_enabled: data.is_2fa_enabled,
+                is_discoverable: data.is_discoverable,
+                transaction_pin: data.transaction_pin // Fetch PIN
+            });
+        } else {
+            // Invalid ID in local storage
+            localStorage.removeItem('payme_user_id');
+        }
+    } catch (err) {
+        console.error(err);
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  const signIn = async (email: string, password: string) => {
+      if (!supabase) return { error: "Backend not configured" };
+      
+      try {
+          // 1. Find user by email
+          const { data, error } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('email', email)
+              .single();
+
+          if (error || !data) return { error: "Invalid email or password" };
+
+          // 2. Compare password hash
+          const valid = await bcrypt.compare(password, data.password_hash);
+          if (!valid) return { error: "Invalid email or password" };
+
+          // 3. Login success
+          localStorage.setItem('payme_user_id', data.id);
+          setUser({
+              id: data.id,
+              email: data.email,
+              username: data.username,
+              full_name: data.full_name,
+              avatar_url: data.avatar_url,
+              occupation: data.occupation,
+              is_2fa_enabled: data.is_2fa_enabled,
+              is_discoverable: data.is_discoverable,
+              transaction_pin: data.transaction_pin
+          });
+          return { error: null };
+
+      } catch (e: any) {
+          return { error: e.message };
+      }
+  };
+
+  const signUp = async (email: string, password: string) => {
+      if (!supabase) return { error: "Backend not configured" };
+
+      try {
+          // 1. Hash the password
+          const hash = await bcrypt.hash(password, 10);
+          
+          // Removed generic avatar generation. User starts with NULL avatar.
+          const avatarUrl = null;
+          
+          // 2. Call Secure RPC
+          const { data, error } = await supabase.rpc('register_user', {
+              p_email: email,
+              p_password_hash: hash,
+              p_full_name: 'PayMe User',
+              p_avatar_url: avatarUrl
+          });
+
+          if (error) return { error: error.message };
+
+          // 3. Login immediately
+          if (data) {
+              localStorage.setItem('payme_user_id', data);
+              await fetchProfile(data);
+              return { error: null };
+          }
+          return { error: "Registration failed" };
+      } catch (e: any) {
+          return { error: e.message };
+      }
+  };
+
+  const signOut = async () => {
+      localStorage.removeItem('payme_user_id');
+      setUser(null);
+  };
+
+  const refreshProfile = async () => {
+      if (user?.id) {
+          await fetchProfile(user.id);
+      }
+  }
+
+  const updateProfile = async (updates: Partial<UserProfile>) => {
+      if (!user || !supabase) return { error: "No user logged in" };
+      try {
+          // Call Secure RPC for updates (Direct UPDATE is blocked by RLS)
+          // We include p_transaction_pin in the RPC call.
+          const { error } = await supabase.rpc('update_user_profile', {
+              p_user_id: user.id,
+              p_full_name: updates.full_name,
+              p_username: updates.username,
+              p_avatar_url: updates.avatar_url,
+              p_occupation: updates.occupation,
+              p_is_2fa_enabled: updates.is_2fa_enabled,
+              p_is_discoverable: updates.is_discoverable,
+              p_transaction_pin: updates.transaction_pin
+          });
+          
+          if (error) throw error;
+          
+          await refreshProfile();
+          return { error: null };
+      } catch (err: any) {
+          return { error: err.message };
+      }
+  }
+
+  return (
+    <AuthContext.Provider value={{ session: !!user, user, loading, signIn, signUp, signOut, refreshProfile, updateProfile }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
