@@ -89,15 +89,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { error: response.error || 'Registration failed' };
       }
       
-      // Store session token
+      // Store session token (backend returns sessionToken directly)
       if (response.data.sessionToken) {
         apiClient.setAuthToken(response.data.sessionToken);
       }
       
-      // Set user profile (without username yet)
-      if (response.data.user) {
-        setUser(response.data.user);
-      }
+      // Create a minimal user profile from registration response
+      // Username will be set later via claimUsername
+      const tempUser: UserProfile = {
+        userId: response.data.userId,
+        email: response.data.email || email,
+        username: '', // Will be claimed later
+        walletAddress: '',
+        balance: 0,
+        createdAt: Date.now(),
+      };
+      
+      setUser(tempUser);
       
       return { error: null };
     } catch (err: any) {
