@@ -4,9 +4,9 @@ import GlassCard from './GlassCard';
 
 const Merchant: React.FC = () => {
   return (
-    <div className="h-full flex flex-col px-4 pt-8 pb-24">
+    <div className="h-full overflow-y-auto px-4 pt-8 pb-28">
       {/* Header - keeping it simple because I'm tired */}
-      <div className="flex flex-col items-center mb-12">
+      <div className="flex flex-col items-center mb-8">
         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#FF5722] to-[#673AB7] flex items-center justify-center mb-4 shadow-2xl shadow-purple-500/30">
           <Store size={40} className="text-white" />
         </div>
@@ -17,7 +17,7 @@ const Merchant: React.FC = () => {
       </div>
 
       {/* Coming Soon Card - because we're not ready yet, obviously */}
-      <GlassCard className="p-8 text-center bg-white dark:bg-white/5 mb-6">
+      <GlassCard className="p-6 text-center bg-white dark:bg-white/5 mb-4">
         <div className="w-16 h-16 rounded-full bg-purple-500/10 dark:bg-purple-500/20 flex items-center justify-center mx-auto mb-4">
           <Rocket size={32} className="text-[#673AB7] dark:text-[#9c7dd6]" />
         </div>
