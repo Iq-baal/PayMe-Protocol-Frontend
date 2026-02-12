@@ -40,7 +40,9 @@ const Home: React.FC<HomeProps> = ({
     try {
       const response = await apiClient.getBalance();
       if (response.success && response.data) {
-        // Handle both response formats
+        // Backend keeps changing response format, so we handle both
+        // Sometimes it's response.data.balance.balance, sometimes just response.data.balance
+        // Why? Because consistency is overrated apparently
         const balanceValue = typeof response.data.balance === 'object' 
           ? response.data.balance.balance 
           : response.data.balance;
@@ -48,6 +50,8 @@ const Home: React.FC<HomeProps> = ({
       }
     } catch (error) {
       console.error('Failed to fetch balance:', error);
+      // Don't crash the app just because balance fetch failed
+      // User can still see their last known balance
     }
   };
 
@@ -66,18 +70,20 @@ const Home: React.FC<HomeProps> = ({
   }, [refreshTrigger, user]);
 
   // Real-time balance polling - update every 5 seconds
+  // Because users are impatient and want to see their money NOW
   useEffect(() => {
     if (!user) return;
     
-    // Initial fetch
+    // Initial fetch - get that balance ASAP
     fetchBalance();
     
-    // Set up polling interval
+    // Set up polling interval - check every 5 seconds
+    // Not too fast (expensive), not too slow (annoying)
     const intervalId = setInterval(() => {
       fetchBalance();
-    }, 5000); // Poll every 5 seconds
+    }, 5000); // 5 seconds is the sweet spot, trust me
     
-    // Cleanup on unmount
+    // Cleanup on unmount - don't want memory leaks at 3AM
     return () => clearInterval(intervalId);
   }, [user]);
 

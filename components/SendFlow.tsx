@@ -70,13 +70,15 @@ const SendFlow: React.FC<SendFlowProps> = ({ onClose, onSuccess, selectedCurrenc
       return val.toLocaleString('en-US', { maximumFractionDigits: 2 });
   };
 
-  // Fetch Balance
+  // Fetch Balance - need to know if user can afford this transaction
+  // Poll every 5 seconds because balance changes and users get confused
   useEffect(() => {
     if (!user) return;
     const fetchBalance = async () => {
         const response = await apiClient.getBalance();
         if (response.success && response.data) {
-            // Handle both response formats
+            // Same response format inconsistency as Home.tsx
+            // One day I'll fix the backend to be consistent, but not today
             const balanceValue = typeof response.data.balance === 'object' 
               ? response.data.balance.balance 
               : response.data.balance;
@@ -86,6 +88,7 @@ const SendFlow: React.FC<SendFlowProps> = ({ onClose, onSuccess, selectedCurrenc
     fetchBalance();
     
     // Poll balance every 5 seconds for real-time updates
+    // User might receive money while on this screen
     const intervalId = setInterval(fetchBalance, 5000);
     return () => clearInterval(intervalId);
   }, [user]);
@@ -104,12 +107,15 @@ const SendFlow: React.FC<SendFlowProps> = ({ onClose, onSuccess, selectedCurrenc
       }
   }, [step, user, recipient]);
 
-  // Validate recipient username
+  // Validate recipient username - this is where the magic happens
+  // As user types, we search the database and show them who they're sending to
+  // Debounced to 500ms because we're not savages hitting the API every keystroke
   useEffect(() => {
     // If we have an initial recipient that hasn't changed, perform a quick check
     if (initialRecipient && recipient === initialRecipient) {
          const checkInitial = async () => {
              const username = initialRecipient.replace('@','').toLowerCase();
+              // Can't send money to yourself, that's just sad
               if (user?.username === username) {
                 setValidationStatus('invalid');
                 return;
@@ -127,35 +133,42 @@ const SendFlow: React.FC<SendFlowProps> = ({ onClose, onSuccess, selectedCurrenc
          return;
     }
 
+    // Debounce timer - wait for user to stop typing before searching
     const timer = setTimeout(async () => {
       const cleanHandle = recipient.replace('@', '').trim().toLowerCase();
 
       if (cleanHandle.length > 2) {
           setValidationStatus('checking');
           
+          // Self-send check - because people try this, I've seen it
           if (user?.username === cleanHandle) {
               setValidationStatus('invalid');
               return;
           }
 
           try {
+            // Hit the API - search for username in database
             const response = await apiClient.getUserByUsername(cleanHandle);
 
             if (response.success && response.data) {
+                // Found them! Show their profile card
                 setRecipientProfile(response.data);
                 setValidationStatus('valid');
             } else {
+                // Username doesn't exist - show error
                 setValidationStatus('invalid');
                 setRecipientProfile(null);
             }
           } catch (e) {
+             // API error - probably network issue
              setValidationStatus('invalid');
           }
       } else if (recipient.length === 0) {
+          // Empty input - reset everything
           setValidationStatus('idle');
           setRecipientProfile(null);
       }
-    }, 500); 
+    }, 500); // 500ms debounce - feels responsive without spamming API
 
     return () => clearTimeout(timer);
   }, [recipient, initialRecipient, user]);

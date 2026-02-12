@@ -41,6 +41,7 @@ export enum AppTab {
   HOME = 'home',
   NOTIFICATIONS = 'notifications',
   NETWORK = 'network',
+  MERCHANT = 'merchant', // Because everyone wants to be a merchant these days
   SETTINGS = 'settings'
 }
 

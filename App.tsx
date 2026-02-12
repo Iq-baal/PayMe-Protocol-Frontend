@@ -3,6 +3,7 @@ import BottomNav from './components/BottomNav';
 import Home from './components/Home';
 import Notifications from './components/Notifications';
 import NetworkStatus from './components/NetworkStatus';
+import Merchant from './components/Merchant';
 import Settings, { SettingsView } from './components/Settings';
 import SendFlow from './components/SendFlow';
 import ReceiveFlow from './components/ReceiveFlow';
@@ -287,6 +288,9 @@ const MainApp: React.FC = () => {
         return <Notifications selectedCurrency={selectedCurrency} />;
       case AppTab.NETWORK:
         return <NetworkStatus />;
+      case AppTab.MERCHANT:
+        // Merchant tab - coming soon to mainnet, not my problem right now
+        return <Merchant />;
       case AppTab.SETTINGS:
         return <Settings 
                  key={settingsInitView} 

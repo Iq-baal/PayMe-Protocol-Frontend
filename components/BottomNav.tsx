@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Bell, Activity, Settings } from 'lucide-react';
+import { Home, Bell, Activity, Settings, Store } from 'lucide-react';
 import { AppTab } from '../types';
 
 interface BottomNavProps {
@@ -21,6 +21,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange, hasUnread
   return (
     <div className="h-20 rounded-[40px] glass-panel flex items-center justify-around px-2 shadow-2xl backdrop-blur-2xl border border-black/5 dark:border-white/10 w-full pointer-events-auto bg-white/80 dark:bg-black/20">
       
+      {/* Home - because that's where the money lives */}
       <button 
         onClick={() => onTabChange(AppTab.HOME)}
         className="flex flex-col items-center justify-center w-16 h-16 rounded-full transition-all duration-300 active:scale-90"
@@ -30,6 +31,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange, hasUnread
         </div>
       </button>
 
+      {/* Notifications - for when people actually send you money */}
       <button 
         onClick={() => onTabChange(AppTab.NOTIFICATIONS)}
         className="flex flex-col items-center justify-center w-16 h-16 rounded-full transition-all duration-300 active:scale-90"
@@ -44,6 +46,17 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange, hasUnread
         </div>
       </button>
 
+      {/* Merchant - coming soon to mainnet, patience young grasshopper */}
+      <button 
+        onClick={() => onTabChange(AppTab.MERCHANT)}
+        className="flex flex-col items-center justify-center w-16 h-16 rounded-full transition-all duration-300 active:scale-90"
+      >
+        <div className={`p-2 rounded-2xl transition-all duration-300 ${activeTab === AppTab.MERCHANT ? 'bg-black/5 dark:bg-white/10' : ''}`}>
+          <Store size={24} className={getIconClass(AppTab.MERCHANT)} strokeWidth={getStrokeWidth(AppTab.MERCHANT)} />
+        </div>
+      </button>
+
+      {/* Network - pretending we care about blockchain stats */}
       <button 
         onClick={() => onTabChange(AppTab.NETWORK)}
         className="flex flex-col items-center justify-center w-16 h-16 rounded-full transition-all duration-300 active:scale-90"
@@ -53,6 +66,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange, hasUnread
         </div>
       </button>
 
+      {/* Settings - where dreams of customization go to die */}
       <button 
         onClick={() => onTabChange(AppTab.SETTINGS)}
         className="flex flex-col items-center justify-center w-16 h-16 rounded-full transition-all duration-300 active:scale-90"
