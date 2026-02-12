@@ -12,6 +12,7 @@ import AuthScreen from './components/Auth/AuthScreen';
 import Onboarding from './components/Auth/Onboarding';
 import InstallPrompt from './components/InstallPrompt';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { BalanceProvider } from './contexts/BalanceContext';
 import { AppTab, Currency, Theme } from './types';
 import { DEFAULT_CURRENCIES } from './constants';
 import { Loader2, Lock, Fingerprint, LogOut } from 'lucide-react';
@@ -400,7 +401,9 @@ const MainApp: React.FC = () => {
 const App: React.FC = () => {
     return (
         <AuthProvider>
-            <MainApp />
+            <BalanceProvider>
+                <MainApp />
+            </BalanceProvider>
         </AuthProvider>
     )
 }

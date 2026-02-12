@@ -3,10 +3,10 @@ import GlassCard from './GlassCard';
 import TransactionList from './TransactionList';
 import PullToRefresh from './PullToRefresh';
 import AnimatedBalance from './AnimatedBalance';
-import { ScanLine, Send, Plus, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { ScanLine, Send, Plus, Eye, EyeOff, Loader2, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { Currency } from '../types';
 import { useAuth } from '../contexts/AuthContext';
-import { apiClient } from '../api/client';
+import { useBalance } from '../contexts/BalanceContext';
 
 interface HomeProps {
   onSend: () => void;
@@ -30,50 +30,13 @@ const Home: React.FC<HomeProps> = ({
     refreshTrigger = 0
 }) => {
   const { user } = useAuth();
-  const [balance, setBalance] = useState<number | undefined>(undefined);
+  const { balance, confirmedBalance, pendingTransactions, isLoading, refreshBalance } = useBalance();
   // Internal refresh trigger for manual pull-to-refresh
   const [internalRefreshTrigger, setInternalRefreshTrigger] = useState(0);
 
-  const fetchBalance = async () => {
-    if (!user) return;
-    
-    try {
-      const response = await apiClient.getBalance();
-      console.log('Balance API Response:', response); // Debug log - remove this later when it works
-      
-      if (response.success && response.data) {
-        // Backend returns { balance: { balance: number, isStale: boolean } }
-        // Or sometimes just { balance: number } because backend devs hate consistency
-        // Or maybe { balance: { balance: number } } just to keep us on our toes
-        let balanceValue = 0;
-        
-        if (typeof response.data.balance === 'object' && response.data.balance !== null) {
-          // It's an object, check if it has a balance property
-          balanceValue = response.data.balance.balance || 0;
-        } else if (typeof response.data.balance === 'number') {
-          // It's just a number, use it directly
-          balanceValue = response.data.balance;
-        } else if (typeof response.data === 'number') {
-          // Sometimes the whole response.data is just the balance number
-          balanceValue = response.data;
-        }
-        
-        console.log('Parsed balance:', balanceValue); // Debug log
-        setBalance(balanceValue);
-      } else {
-        console.error('Balance fetch failed:', response.error);
-      }
-    } catch (error) {
-      console.error('Failed to fetch balance:', error);
-      // Don't crash the app just because balance fetch failed
-      // User can still see their last known balance or 0
-      setBalance(0);
-    }
-  };
-
   const handleRefresh = async () => {
       // Fetch fresh balance
-      await fetchBalance();
+      await refreshBalance();
       // Increment internal trigger to signal TransactionList to reload
       setInternalRefreshTrigger(prev => prev + 1);
       // Wait a little to let the user see the spinner (placebo)
@@ -82,28 +45,10 @@ const Home: React.FC<HomeProps> = ({
 
   // Re-fetch when external refreshTrigger changes (e.g. after a payment)
   useEffect(() => {
-      fetchBalance();
-  }, [refreshTrigger, user]);
+      refreshBalance();
+  }, [refreshTrigger, refreshBalance]);
 
-  // Real-time balance polling - update every 5 seconds
-  // Because users are impatient and want to see their money NOW
-  useEffect(() => {
-    if (!user) return;
-    
-    // Initial fetch - get that balance ASAP
-    fetchBalance();
-    
-    // Set up polling interval - check every 5 seconds
-    // Not too fast (expensive), not too slow (annoying)
-    const intervalId = setInterval(() => {
-      fetchBalance();
-    }, 5000); // 5 seconds is the sweet spot, trust me
-    
-    // Cleanup on unmount - don't want memory leaks at 3AM
-    return () => clearInterval(intervalId);
-  }, [user]);
-
-  const isBalanceLoading = balance === undefined;
+  const isBalanceLoading = isLoading;
 
   // Calculate display balance logic for when not hidden
   const rawBalanceInCurrency = (balance || 0) * selectedCurrency.rate;
@@ -155,9 +100,17 @@ const Home: React.FC<HomeProps> = ({
               <div>
                   <div className="flex justify-between items-start mb-2">
                       <span className="text-gray-500 dark:text-white/60 text-sm font-medium">Total Balance ({selectedCurrency.code})</span>
-                      <span className="px-3 py-1 rounded-full bg-green-500/10 dark:bg-green-500/20 text-green-600 dark:text-green-400 text-xs font-bold border border-green-500/10 dark:border-green-500/20">
-                          Live
-                      </span>
+                      <div className="flex items-center gap-2">
+                          {pendingTransactions.length > 0 && (
+                              <span className="px-2 py-1 rounded-full bg-yellow-500/10 dark:bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 text-xs font-bold border border-yellow-500/10 dark:border-yellow-500/20 flex items-center gap-1">
+                                  <Clock size={12} />
+                                  {pendingTransactions.length} pending
+                              </span>
+                          )}
+                          <span className="px-3 py-1 rounded-full bg-green-500/10 dark:bg-green-500/20 text-green-600 dark:text-green-400 text-xs font-bold border border-green-500/10 dark:border-green-500/20">
+                              Live
+                          </span>
+                      </div>
                   </div>
                   
                   {isBalanceLoading ? (
@@ -191,6 +144,48 @@ const Home: React.FC<HomeProps> = ({
                   {isBalanceHidden && selectedCurrency.code !== 'USDC' && (
                       <div className="text-xs text-gray-400 dark:text-white/30 mt-1 font-mono">
                           ≈ •••• USDC
+                      </div>
+                  )}
+
+                  {/* Pending transactions list */}
+                  {!isBalanceHidden && pendingTransactions.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                          {pendingTransactions.map(tx => (
+                              <div key={tx.id} className="flex items-center gap-2 text-xs">
+                                  {tx.status === 'pending' && (
+                                      <>
+                                          <Clock size={12} className="text-yellow-500 animate-pulse" />
+                                          <span className="text-gray-600 dark:text-white/60">
+                                              {tx.type === 'send' ? 'Sending' : 'Receiving'} ${tx.amount.toLocaleString()}...
+                                          </span>
+                                      </>
+                                  )}
+                                  {tx.status === 'confirming' && (
+                                      <>
+                                          <Loader2 size={12} className="text-blue-500 animate-spin" />
+                                          <span className="text-gray-600 dark:text-white/60">
+                                              Confirming ${tx.amount.toLocaleString()} on blockchain...
+                                          </span>
+                                      </>
+                                  )}
+                                  {tx.status === 'confirmed' && (
+                                      <>
+                                          <CheckCircle size={12} className="text-green-500" />
+                                          <span className="text-green-600 dark:text-green-400">
+                                              ${tx.amount.toLocaleString()} confirmed!
+                                          </span>
+                                      </>
+                                  )}
+                                  {tx.status === 'failed' && (
+                                      <>
+                                          <XCircle size={12} className="text-red-500" />
+                                          <span className="text-red-600 dark:text-red-400">
+                                              ${tx.amount.toLocaleString()} failed
+                                          </span>
+                                      </>
+                                  )}
+                              </div>
+                          ))}
                       </div>
                   )}
               </div>

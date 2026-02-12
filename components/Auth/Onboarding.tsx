@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Loader2, CheckCircle, AtSign, AlertCircle, Gift, Eye, EyeOff, ArrowRight, Lock } from 'lucide-react';
+import LoadingWithFacts from '../LoadingWithFacts';
 
 const Onboarding: React.FC = () => {
     const { claimUsername } = useAuth();
-    const [step, setStep] = useState<'username' | 'pin'>('username'); // Two-step flow now
+    const [step, setStep] = useState<'username' | 'pin' | 'loading'>('username'); // Three-step flow now
     const [username, setUsername] = useState('');
     const [pin, setPin] = useState('');
     const [showPin, setShowPin] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [showWelcome, setShowWelcome] = useState(false); // Welcome notification state
 
     // Step 1: Validate username and move to PIN screen
     const handleUsernameNext = (e: React.FormEvent) => {
@@ -48,66 +48,23 @@ const Onboarding: React.FC = () => {
             setError(result.error);
             setLoading(false);
         } else {
-            // Success! Show welcome notification
-            // Bonus is being sent in the background (takes 10-30 seconds on Solana devnet)
-            setShowWelcome(true);
-            
-            // Auto-dismiss after 5 seconds, then user goes to dashboard
-            setTimeout(() => {
-                setShowWelcome(false);
-                // User will be redirected to main app by AuthContext
-            }, 5000);
+            // Success! Show loading screen with facts
+            // This gives blockchain time to confirm (15-20 seconds)
+            setLoading(false);
+            setStep('loading');
         }
     };
 
-    // Welcome notification overlay - shows after successful claim
-    if (showWelcome) {
-        return (
-            <div className="flex flex-col h-full items-center justify-center p-6 animate-fade-in bg-[#F2F2F7] dark:bg-[#0f0b1e]">
-                <div className="flex flex-col items-center gap-6 max-w-sm">
-                    {/* Success animation - pulsing rings */}
-                    <div className="relative">
-                        <div className="absolute inset-0 rounded-full bg-green-500/20 animate-ping" />
-                        <div className="absolute inset-0 rounded-full bg-green-500/10 animate-pulse" style={{ animationDelay: '0.5s' }} />
-                        <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shadow-2xl shadow-green-500/50">
-                            <CheckCircle size={48} className="text-white" />
-                        </div>
-                    </div>
+    // Handle loading completion - redirect to dashboard
+    const handleLoadingComplete = () => {
+        // User will be redirected to main app by AuthContext
+        // The 20-second wait gives blockchain time to confirm
+        window.location.reload(); // Force refresh to load dashboard with confirmed balance
+    };
 
-                    {/* Welcome message */}
-                    <div className="text-center space-y-2">
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                            Welcome to PayMe! 🎉
-                        </h1>
-                        <p className="text-gray-600 dark:text-white/60">
-                            Your account is ready
-                        </p>
-                    </div>
-
-                    {/* Bonus card */}
-                    <div className="w-full bg-white dark:bg-white/5 rounded-2xl p-6 border border-green-500/20 shadow-lg">
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
-                                <Gift size={20} className="text-green-600 dark:text-green-400" />
-                            </div>
-                            <div>
-                                <div className="text-sm text-gray-500 dark:text-white/50">Welcome Bonus</div>
-                                <div className="text-2xl font-bold text-green-600 dark:text-green-400">10,000 USDC</div>
-                            </div>
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-white/40 bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
-                            ⏳ Your bonus is being sent! It may take 10-30 seconds to appear in your wallet due to blockchain confirmation time.
-                        </div>
-                    </div>
-
-                    {/* Loading indicator */}
-                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-white/50">
-                        <Loader2 size={16} className="animate-spin" />
-                        <span>Taking you to your dashboard...</span>
-                    </div>
-                </div>
-            </div>
-        );
+    // Loading screen with PayMe facts (15-20 seconds)
+    if (step === 'loading') {
+        return <LoadingWithFacts duration={20000} onComplete={handleLoadingComplete} />;
     }
 
     // Step 1: Username claim screen
