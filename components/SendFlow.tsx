@@ -119,10 +119,10 @@ const SendFlow: React.FC<SendFlowProps> = ({ onClose, onSuccess, selectedCurrenc
 
   // Validate recipient username - this is where the magic happens
   // As user types, we search the database and show them who they're sending to
-  // Debounced to 500ms because we're not savages hitting the API every keystroke
+  // Debounced to 300ms for faster response (was 500ms)
   useEffect(() => {
     // If we have an initial recipient that hasn't changed, perform a quick check
-    if (initialRecipient && recipient === initialRecipient) {
+    if (initialRecipient && recipient === initialRecipient.replace('@', '')) {
          const checkInitial = async () => {
              const username = initialRecipient.replace('@','').toLowerCase();
               // Can't send money to yourself, that's just sad
@@ -144,6 +144,7 @@ const SendFlow: React.FC<SendFlowProps> = ({ onClose, onSuccess, selectedCurrenc
     }
 
     // Debounce timer - wait for user to stop typing before searching
+    // Reduced to 300ms for faster search (fintech best practice)
     const timer = setTimeout(async () => {
       const cleanHandle = recipient.replace('@', '').trim().toLowerCase();
 
@@ -153,6 +154,7 @@ const SendFlow: React.FC<SendFlowProps> = ({ onClose, onSuccess, selectedCurrenc
           // Self-send check - because people try this, I've seen it
           if (user?.username === cleanHandle) {
               setValidationStatus('invalid');
+              setRecipientProfile(null);
               return;
           }
 
@@ -171,14 +173,20 @@ const SendFlow: React.FC<SendFlowProps> = ({ onClose, onSuccess, selectedCurrenc
             }
           } catch (e) {
              // API error - probably network issue
+             console.error('Username search error:', e);
              setValidationStatus('invalid');
+             setRecipientProfile(null);
           }
       } else if (recipient.length === 0) {
           // Empty input - reset everything
           setValidationStatus('idle');
           setRecipientProfile(null);
+      } else {
+          // Less than 3 chars - don't search yet
+          setValidationStatus('idle');
+          setRecipientProfile(null);
       }
-    }, 500); // 500ms debounce - feels responsive without spamming API
+    }, 300); // 300ms debounce - faster search, better UX
 
     return () => clearTimeout(timer);
   }, [recipient, initialRecipient, user]);
@@ -390,14 +398,12 @@ const SendFlow: React.FC<SendFlowProps> = ({ onClose, onSuccess, selectedCurrenc
             </div>
             <input 
                 type="text" 
-                placeholder="Enter @username"
+                placeholder="Enter username"
                 value={recipient}
                 onChange={(e) => {
-                    let val = e.target.value.toLowerCase(); // Force lowercase
-                    // Force @ prefix logic for better UX
-                    if (val.length === 1 && val !== '@') {
-                        val = '@' + val;
-                    }
+                    let val = e.target.value.toLowerCase().trim();
+                    // Remove any @ symbols - we'll add it internally for search
+                    val = val.replace(/@/g, '');
                     setRecipient(val);
                 }}
                 className="w-full bg-white dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl py-4 pl-12 pr-12 text-gray-900 dark:text-white text-lg font-medium outline-none focus:border-[#FF5722] transition-colors shadow-sm dark:shadow-none"
@@ -439,7 +445,7 @@ const SendFlow: React.FC<SendFlowProps> = ({ onClose, onSuccess, selectedCurrenc
                     <div 
                         key={u.id}
                         onClick={() => {
-                            setRecipient('@' + u.username);
+                            setRecipient(u.username); // No @ prefix
                             setRecipientProfile(u);
                             // Immediate transition feels snappy
                             setValidationStatus('valid');
