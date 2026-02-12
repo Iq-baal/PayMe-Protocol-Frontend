@@ -39,19 +39,35 @@ const Home: React.FC<HomeProps> = ({
     
     try {
       const response = await apiClient.getBalance();
+      console.log('Balance API Response:', response); // Debug log - remove this later when it works
+      
       if (response.success && response.data) {
-        // Backend keeps changing response format, so we handle both
-        // Sometimes it's response.data.balance.balance, sometimes just response.data.balance
-        // Why? Because consistency is overrated apparently
-        const balanceValue = typeof response.data.balance === 'object' 
-          ? response.data.balance.balance 
-          : response.data.balance;
-        setBalance(balanceValue || 0);
+        // Backend returns { balance: { balance: number, isStale: boolean } }
+        // Or sometimes just { balance: number } because backend devs hate consistency
+        // Or maybe { balance: { balance: number } } just to keep us on our toes
+        let balanceValue = 0;
+        
+        if (typeof response.data.balance === 'object' && response.data.balance !== null) {
+          // It's an object, check if it has a balance property
+          balanceValue = response.data.balance.balance || 0;
+        } else if (typeof response.data.balance === 'number') {
+          // It's just a number, use it directly
+          balanceValue = response.data.balance;
+        } else if (typeof response.data === 'number') {
+          // Sometimes the whole response.data is just the balance number
+          balanceValue = response.data;
+        }
+        
+        console.log('Parsed balance:', balanceValue); // Debug log
+        setBalance(balanceValue);
+      } else {
+        console.error('Balance fetch failed:', response.error);
       }
     } catch (error) {
       console.error('Failed to fetch balance:', error);
       // Don't crash the app just because balance fetch failed
-      // User can still see their last known balance
+      // User can still see their last known balance or 0
+      setBalance(0);
     }
   };
 

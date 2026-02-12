@@ -76,13 +76,23 @@ const SendFlow: React.FC<SendFlowProps> = ({ onClose, onSuccess, selectedCurrenc
     if (!user) return;
     const fetchBalance = async () => {
         const response = await apiClient.getBalance();
+        console.log('SendFlow Balance Response:', response); // Debug - tired of guessing response formats
+        
         if (response.success && response.data) {
             // Same response format inconsistency as Home.tsx
             // One day I'll fix the backend to be consistent, but not today
-            const balanceValue = typeof response.data.balance === 'object' 
-              ? response.data.balance.balance 
-              : response.data.balance;
-            setCurrentBalance(balanceValue || 0);
+            let balanceValue = 0;
+            
+            if (typeof response.data.balance === 'object' && response.data.balance !== null) {
+              balanceValue = response.data.balance.balance || 0;
+            } else if (typeof response.data.balance === 'number') {
+              balanceValue = response.data.balance;
+            } else if (typeof response.data === 'number') {
+              balanceValue = response.data;
+            }
+            
+            console.log('SendFlow Parsed balance:', balanceValue);
+            setCurrentBalance(balanceValue);
         }
     };
     fetchBalance();
