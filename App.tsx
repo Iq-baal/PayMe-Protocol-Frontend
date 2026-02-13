@@ -267,7 +267,8 @@ const MainApp: React.FC = () => {
       return <AuthScreen />;
   }
 
-  if (session && user && !user.username) {
+  // Show onboarding if no username OR no wallet (PIN not set)
+  if (session && user && (!user.username || !user.walletAddress)) {
       return <Onboarding />;
   }
 

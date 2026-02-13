@@ -1,6 +1,5 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import './config/amplify'; // Initialize AWS Amplify
 import App from './App';
 import { logger } from './utils/logger';
 

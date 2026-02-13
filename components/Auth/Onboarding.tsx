@@ -1,202 +1,305 @@
+/**
+ * Onboarding Flow
+ * Step 1: Claim Username (creates wallet)
+ * Step 2: Set Transaction PIN (encrypts wallet)
+ */
+
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { Loader2, CheckCircle, AtSign, AlertCircle, Gift, Eye, EyeOff, ArrowRight, Lock } from 'lucide-react';
-import LoadingWithFacts from '../LoadingWithFacts';
+import { User, Lock, ArrowRight, Loader2, CheckCircle, Fingerprint } from 'lucide-react';
+import { logger } from '../../utils/logger';
 
 const Onboarding: React.FC = () => {
-    const { claimUsername } = useAuth();
-    const [step, setStep] = useState<'username' | 'pin' | 'loading'>('username'); // Three-step flow now
-    const [username, setUsername] = useState('');
-    const [pin, setPin] = useState('');
-    const [showPin, setShowPin] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+  const { claimUsername, setTransactionPIN } = useAuth();
+  
+  const [step, setStep] = useState<'username' | 'pin' | 'biometrics'>('username');
+  const [username, setUsername] = useState('');
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-    // Step 1: Validate username and move to PIN screen
-    const handleUsernameNext = (e: React.FormEvent) => {
-        e.preventDefault();
-        setError(null);
+  const handleClaimUsername = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
 
-        // Sanitize: allow lowercase, numbers, and underscores.
-        const cleanUsername = username.replace(/[^a-z0-9_]/g, '').toLowerCase();
+    try {
+      const result = await claimUsername(username);
+      
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setStep('pin');
+        logger.log('Username claimed:', username);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to claim username');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        if (cleanUsername.length < 3) {
-            setError("Username must be at least 3 characters.");
-            return;
-        }
+  const handleSetPIN = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
 
-        setUsername(cleanUsername);
-        setStep('pin'); // Move to PIN screen
-    };
-
-    // Step 2: Submit PIN and claim username
-    const handlePinSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        setError(null);
-
-        if (pin.length !== 4) {
-            setError("PIN must be exactly 4 digits.");
-            setLoading(false);
-            return;
-        }
-
-        // Claiming the username and setting PIN
-        const result = await claimUsername(username, pin);
-
-        if (result.error) {
-            setError(result.error);
-            setLoading(false);
-        } else {
-            // Success! Show loading screen with facts
-            // This gives blockchain time to confirm (15-20 seconds)
-            setLoading(false);
-            setStep('loading');
-        }
-    };
-
-    // Handle loading completion - redirect to dashboard
-    const handleLoadingComplete = () => {
-        // User will be redirected to main app by AuthContext
-        // The 20-second wait gives blockchain time to confirm
-        window.location.reload(); // Force refresh to load dashboard with confirmed balance
-    };
-
-    // Loading screen with PayMe facts (15-20 seconds)
-    if (step === 'loading') {
-        return <LoadingWithFacts duration={20000} onComplete={handleLoadingComplete} />;
+    if (pin !== confirmPin) {
+      setError('PINs do not match');
+      return;
     }
 
-    // Step 1: Username claim screen
-    if (step === 'username') {
-        return (
-            <div className="flex flex-col h-full p-6 pt-20 animate-fade-in bg-[#F2F2F7] dark:bg-[#0f0b1e]">
-                <div className="flex flex-col items-center mb-8">
-                    <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mb-6 ring-4 ring-green-500/5">
-                        <AtSign size={32} className="text-green-600 dark:text-green-400" />
-                    </div>
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Claim Your PayMe ID</h1>
-                    <p className="text-gray-500 dark:text-white/50 text-center max-w-[280px] mb-4">
-                        Choose a unique username. This is how people will send you money globally.
-                    </p>
-                    <div className="flex items-center gap-2 px-3 py-1 bg-[#FF5722]/10 rounded-full border border-[#FF5722]/20">
-                        <Gift size={14} className="text-[#FF5722]" />
-                        <span className="text-xs font-bold text-[#FF5722]">Unlock 10,000 USDC Bonus</span>
-                    </div>
-                </div>
-
-                <form onSubmit={handleUsernameNext} className="flex flex-col gap-4">
-                    <div className="relative">
-                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-white/30 font-bold text-lg">@</div>
-                        <input 
-                            type="text" 
-                            placeholder="username123"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value.toLowerCase())}
-                            className="w-full bg-white dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl py-4 pl-10 pr-4 text-gray-900 dark:text-white outline-none focus:border-green-500 transition-colors font-bold text-lg lowercase"
-                            required
-                            autoFocus
-                        />
-                    </div>
-                    
-                    <div className="text-center text-xs text-gray-400 dark:text-white/30">
-                        Use lowercase letters, numbers, and underscores only
-                    </div>
-
-                    {error && (
-                        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-600 dark:text-red-400 text-sm flex items-center gap-2 justify-center text-center">
-                            <AlertCircle size={16} className="flex-shrink-0" /> {error}
-                        </div>
-                    )}
-
-                    <button 
-                        type="submit"
-                        disabled={!username || username.length < 3}
-                        className="mt-4 w-full py-4 rounded-[24px] bg-gray-900 dark:bg-white text-white dark:text-[#0f0b1e] font-bold text-lg shadow-xl shadow-black/10 dark:shadow-white/10 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        Next <ArrowRight size={20} />
-                    </button>
-                </form>
-            </div>
-        );
+    if (!/^\d{4}$/.test(pin)) {
+      setError('PIN must be 4 digits');
+      return;
     }
 
-    // Step 2: PIN setup screen
-    return (
-        <div className="flex flex-col h-full p-6 pt-20 animate-fade-in bg-[#F2F2F7] dark:bg-[#0f0b1e]">
-            <div className="flex flex-col items-center mb-8">
-                <div className="w-16 h-16 rounded-full bg-purple-500/10 flex items-center justify-center mb-6 ring-4 ring-purple-500/5">
-                    <Lock size={32} className="text-purple-600 dark:text-purple-400" />
-                </div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Secure Your Account</h1>
-                <p className="text-gray-500 dark:text-white/50 text-center max-w-[280px] mb-4">
-                    Create a 4-digit PIN to protect your transactions. You'll need this every time you send money.
-                </p>
-                <div className="px-4 py-2 bg-green-500/10 rounded-full border border-green-500/20">
-                    <span className="text-sm font-medium text-green-600 dark:text-green-400">@{username}</span>
-                </div>
-            </div>
+    setLoading(true);
 
-            <form onSubmit={handlePinSubmit} className="flex flex-col gap-4">
-                <div className="relative">
-                    <input 
-                        type={showPin ? "text" : "password"}
-                        inputMode="numeric" // This triggers numeric keyboard on mobile! 🎉
-                        pattern="[0-9]*" // iOS needs this too
-                        placeholder="Enter 4-digit PIN"
-                        value={pin}
-                        onChange={(e) => {
-                            // Only allow numbers, max 4 digits
-                            const value = e.target.value.replace(/\D/g, '').slice(0, 4);
-                            setPin(value);
-                        }}
-                        maxLength={4}
-                        className="w-full bg-white dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl p-4 pr-12 text-gray-900 dark:text-white outline-none focus:border-purple-500 transition-colors text-center text-2xl font-bold tracking-[0.5em]"
-                        required
-                        autoFocus
-                    />
-                    <button
-                        type="button"
-                        onClick={() => setShowPin(!showPin)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/60 transition-colors"
-                    >
-                        {showPin ? <EyeOff size={20} /> : <Eye size={20} />}
-                    </button>
-                </div>
-                
-                <div className="text-center text-xs text-gray-400 dark:text-white/30">
-                    🔒 Your PIN is encrypted and stored securely. Never share it with anyone!
-                </div>
+    try {
+      const result = await setTransactionPIN(pin);
+      
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setStep('biometrics');
+        logger.log('Transaction PIN set successfully');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to set PIN');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-                {error && (
-                    <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-600 dark:text-red-400 text-sm flex items-center gap-2 justify-center text-center">
-                        <AlertCircle size={16} className="flex-shrink-0" /> {error}
-                    </div>
-                )}
+  const handleEnableBiometrics = async () => {
+    try {
+      // Enable Face ID/Touch ID for app unlock
+      localStorage.setItem('payme_face_id_enabled', 'true');
+      logger.log('Biometrics enabled');
+      // Onboarding complete - AuthContext will navigate to dashboard
+      window.location.reload();
+    } catch (err) {
+      logger.error('Failed to enable biometrics', err);
+    }
+  };
 
-                <div className="flex gap-3">
-                    <button 
-                        type="button"
-                        onClick={() => {
-                            setStep('username');
-                            setPin('');
-                            setError(null);
-                        }}
-                        className="px-6 py-4 rounded-[24px] bg-white dark:bg-white/5 text-gray-900 dark:text-white font-bold text-lg border border-gray-200 dark:border-white/10 active:scale-[0.98] transition-all"
-                    >
-                        Back
-                    </button>
-                    <button 
-                        type="submit"
-                        disabled={loading || pin.length !== 4}
-                        className="flex-1 py-4 rounded-[24px] bg-gray-900 dark:bg-white text-white dark:text-[#0f0b1e] font-bold text-lg shadow-xl shadow-black/10 dark:shadow-white/10 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {loading ? <Loader2 className="animate-spin" /> : <>Claim ID & Bonus <CheckCircle size={20} /></>}
-                    </button>
-                </div>
-            </form>
+  const handleSkipBiometrics = () => {
+    localStorage.setItem('payme_face_id_enabled', 'false');
+    window.location.reload();
+  };
+
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#0f0b1e] via-[#1a1333] to-[#0f0b1e] text-white px-6 relative overflow-hidden">
+      {/* Background Effects */}
+      <div className="absolute top-[-10%] left-[-20%] w-[80%] h-[60%] bg-[#673AB7] rounded-full mix-blend-screen filter blur-[120px] opacity-20 animate-pulse-slow"></div>
+      <div className="absolute bottom-[-10%] right-[-20%] w-[80%] h-[60%] bg-[#FF5722] rounded-full mix-blend-screen filter blur-[120px] opacity-20 animate-pulse-slow"></div>
+
+      <div className="relative z-10 w-full max-w-md">
+        {/* Progress Indicator */}
+        <div className="flex items-center justify-center gap-2 mb-8">
+          <div className={`w-2 h-2 rounded-full ${step === 'username' ? 'bg-[#FF5722]' : 'bg-white/20'}`}></div>
+          <div className={`w-2 h-2 rounded-full ${step === 'pin' ? 'bg-[#FF5722]' : 'bg-white/20'}`}></div>
+          <div className={`w-2 h-2 rounded-full ${step === 'biometrics' ? 'bg-[#FF5722]' : 'bg-white/20'}`}></div>
         </div>
-    );
+
+        {/* Username Step */}
+        {step === 'username' && (
+          <form onSubmit={handleClaimUsername} className="space-y-6 animate-fade-in">
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-gradient-to-br from-[#FF5722] to-[#673AB7] rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <User size={32} />
+              </div>
+              <h2 className="text-3xl font-bold mb-2">Choose Your Username</h2>
+              <p className="text-white/50">This is how people will send you money</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-white/70 mb-2">
+                Username
+              </label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/50 text-lg">@</span>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  placeholder="yourname"
+                  className="w-full pl-10 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-white/30 focus:outline-none focus:border-[#FF5722] transition-all"
+                  maxLength={20}
+                  required
+                  autoFocus
+                />
+              </div>
+              <p className="text-white/40 text-xs mt-2">
+                3-20 characters, letters, numbers, and underscores only
+              </p>
+            </div>
+
+            {error && (
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || username.length < 3}
+              className="w-full py-4 bg-gradient-to-r from-[#FF5722] to-[#FF7043] rounded-2xl font-bold text-white flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-[#FF5722]/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="animate-spin" size={20} />
+                  Creating Wallet...
+                </>
+              ) : (
+                <>
+                  Continue
+                  <ArrowRight size={20} />
+                </>
+              )}
+            </button>
+          </form>
+        )}
+
+        {/* Transaction PIN Step */}
+        {step === 'pin' && (
+          <form onSubmit={handleSetPIN} className="space-y-6 animate-fade-in">
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-gradient-to-br from-[#FF5722] to-[#673AB7] rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Lock size={32} />
+              </div>
+              <h2 className="text-3xl font-bold mb-2">Set Transaction PIN</h2>
+              <p className="text-white/50">You'll need this to send money</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-white/70 mb-2">
+                Create 4-Digit PIN
+              </label>
+              <input
+                type="password"
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="••••"
+                className="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-center text-2xl tracking-widest placeholder-white/30 focus:outline-none focus:border-[#FF5722] transition-all"
+                inputMode="numeric"
+                maxLength={4}
+                required
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-white/70 mb-2">
+                Confirm PIN
+              </label>
+              <input
+                type="password"
+                value={confirmPin}
+                onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="••••"
+                className="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-center text-2xl tracking-widest placeholder-white/30 focus:outline-none focus:border-[#FF5722] transition-all"
+                inputMode="numeric"
+                maxLength={4}
+                required
+              />
+            </div>
+
+            {error && (
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || pin.length !== 4 || confirmPin.length !== 4}
+              className="w-full py-4 bg-gradient-to-r from-[#FF5722] to-[#FF7043] rounded-2xl font-bold text-white flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-[#FF5722]/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="animate-spin" size={20} />
+                  Securing Wallet...
+                </>
+              ) : (
+                <>
+                  Set PIN
+                  <ArrowRight size={20} />
+                </>
+              )}
+            </button>
+
+            <p className="text-center text-white/40 text-xs">
+              Your PIN encrypts your wallet. Keep it safe and don't share it.
+            </p>
+          </form>
+        )}
+
+        {/* Biometrics Step */}
+        {step === 'biometrics' && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-gradient-to-br from-[#FF5722] to-[#673AB7] rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Fingerprint size={32} />
+              </div>
+              <h2 className="text-3xl font-bold mb-2">Enable Face ID</h2>
+              <p className="text-white/50">Unlock PayMe quickly and securely</p>
+            </div>
+
+            <div className="p-6 bg-white/5 border border-white/10 rounded-2xl space-y-4">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="text-green-400 flex-shrink-0 mt-1" size={20} />
+                <div>
+                  <p className="font-medium">Fast & Secure</p>
+                  <p className="text-white/50 text-sm">Unlock with your face or fingerprint</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <CheckCircle className="text-green-400 flex-shrink-0 mt-1" size={20} />
+                <div>
+                  <p className="font-medium">Transaction PIN Separate</p>
+                  <p className="text-white/50 text-sm">You'll still need your PIN to send money</p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleEnableBiometrics}
+              className="w-full py-4 bg-gradient-to-r from-[#FF5722] to-[#FF7043] rounded-2xl font-bold text-white flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-[#FF5722]/20 transition-all"
+            >
+              Enable Face ID
+              <Fingerprint size={20} />
+            </button>
+
+            <button
+              onClick={handleSkipBiometrics}
+              className="w-full py-3 text-white/50 hover:text-white transition-colors text-sm"
+            >
+              Skip for now
+            </button>
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.3s ease-out forwards;
+        }
+        @keyframes pulse-slow {
+          0%, 100% { opacity: 0.2; transform: scale(1); }
+          50% { opacity: 0.15; transform: scale(1.05); }
+        }
+        .animate-pulse-slow {
+          animation: pulse-slow 8s infinite ease-in-out;
+        }
+      `}</style>
+    </div>
+  );
 };
 
 export default Onboarding;

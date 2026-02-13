@@ -4,7 +4,7 @@ import {
   User, Shield, Smartphone, HelpCircle, LogOut, ChevronRight, ChevronLeft, 
   Moon, Sun, CheckCircle as CheckCircleIcon, Lock, Fingerprint, Mail, AtSign, MessageCircle, 
   ChevronDown, Search, KeyRound, Eye, Banknote, RefreshCcw, Camera, Save, X, Link as LinkIcon, Image as ImageIcon,
-  FileText, Info, ExternalLink, Download, Briefcase, ScanFace, Scale, Check
+  FileText, Info, ExternalLink, Download, Briefcase, ScanFace, Scale, Check, Key, Trash2, AlertTriangle, Loader2
 } from 'lucide-react';
 import { Currency, Theme } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,7 +12,7 @@ import { apiClient } from '../api/client';
 import AnimatedBalance from './AnimatedBalance';
 import { registerBiometrics, isBiometricsSupported } from '../utils/biometrics';
 
-export type SettingsView = 'main' | 'account' | 'security' | 'appearance' | 'help' | 'currency' | 'privacy' | 'terms' | 'change-pin';
+export type SettingsView = 'main' | 'account' | 'security' | 'appearance' | 'help' | 'currency' | 'privacy' | 'terms' | 'change-pin' | 'export-wallet' | 'delete-account';
 
 interface SettingsProps {
   initialView?: SettingsView;
@@ -45,6 +45,18 @@ const Settings: React.FC<SettingsProps> = ({ initialView = 'main', selectedCurre
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinError, setPinError] = useState('');
+
+  // Export Wallet State
+  const [showPrivateKey, setShowPrivateKey] = useState(false);
+  const [exportPin, setExportPin] = useState('');
+  const [privateKeyData, setPrivateKeyData] = useState<string>('');
+  const [exportError, setExportError] = useState('');
+
+  // Delete Account State
+  const [deleteStep, setDeleteStep] = useState<'confirm' | 'verify-pin' | 'processing' | 'success'>('confirm');
+  const [deletePin, setDeletePin] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   // Settings States
   const [faceIdEnabled, setFaceIdEnabled] = useState(false);
@@ -137,6 +149,69 @@ const Settings: React.FC<SettingsProps> = ({ initialView = 'main', selectedCurre
 
   // --- Setting Toggles ---
 
+  const handleExportWallet = async () => {
+      if (!exportPin || exportPin.length !== 4) {
+          setExportError('Please enter your 4-digit PIN');
+          return;
+      }
+
+      try {
+          // Verify PIN and get private key from backend
+          const response = await apiClient.exportWallet(exportPin);
+          
+          if (response.success && response.data) {
+              setPrivateKeyData(response.data.privateKey);
+              setShowPrivateKey(true);
+              setExportError('');
+          } else {
+              setExportError(response.error || 'Failed to export wallet. Incorrect PIN.');
+              setExportPin('');
+          }
+      } catch (error) {
+          setExportError('Failed to export wallet. Please try again.');
+          setExportPin('');
+      }
+  };
+
+  const handleDeleteAccount = async () => {
+      if (deleteStep === 'confirm') {
+          if (deleteConfirmText.toLowerCase() !== 'delete') {
+              setDeleteError('Please type "delete" to confirm');
+              return;
+          }
+          setDeleteStep('verify-pin');
+          setDeleteError('');
+      } else if (deleteStep === 'verify-pin') {
+          if (!deletePin || deletePin.length !== 4) {
+              setDeleteError('Please enter your 4-digit PIN');
+              return;
+          }
+
+          setDeleteStep('processing');
+          
+          try {
+              // Call backend to disable account (30-day grace period)
+              const response = await apiClient.deleteAccount(deletePin);
+              
+              if (response.success) {
+                  setDeleteStep('success');
+                  // Sign out after 3 seconds
+                  setTimeout(() => {
+                      signOut();
+                  }, 3000);
+              } else {
+                  setDeleteError(response.error || 'Failed to delete account. Incorrect PIN.');
+                  setDeletePin('');
+                  setDeleteStep('verify-pin');
+              }
+          } catch (error) {
+              setDeleteError('Failed to delete account. Please try again.');
+              setDeletePin('');
+              setDeleteStep('verify-pin');
+          }
+      }
+  };
+
   const toggleFaceId = async () => {
       if (!faceIdEnabled) {
           // Check for support first
@@ -188,8 +263,11 @@ const Settings: React.FC<SettingsProps> = ({ initialView = 'main', selectedCurre
   const toggle2FA = async () => {
       if (!user) return;
       
-      // Require PIN setup before enabling 2FA
-      if (!user.is_2fa_enabled && !user.transaction_pin) {
+      // Check if user has transaction_pin set (not just checking is_2fa_enabled)
+      // PIN should be set during onboarding, but let's verify
+      const hasPIN = user.transaction_pin !== null && user.transaction_pin !== undefined && user.transaction_pin !== '';
+      
+      if (!user.is_2fa_enabled && !hasPIN) {
           alert("Please set a Transaction PIN first.");
           setCurrentView('change-pin');
           return;
@@ -720,7 +798,7 @@ const Settings: React.FC<SettingsProps> = ({ initialView = 'main', selectedCurre
                  </div>
                   <div 
                     onClick={toggleDiscovery}
-                    className="p-5 flex items-center justify-between cursor-pointer active:bg-black/5 dark:active:bg-white/5 transition-colors"
+                    className="p-5 flex items-center justify-between border-b border-black/5 dark:border-white/5 cursor-pointer active:bg-black/5 dark:active:bg-white/5 transition-colors"
                   >
                     <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-white/10 flex items-center justify-center text-gray-600 dark:text-white">
@@ -734,6 +812,42 @@ const Settings: React.FC<SettingsProps> = ({ initialView = 'main', selectedCurre
                      <div className={`w-12 h-7 rounded-full p-1 flex items-center transition-colors duration-300 ${isDiscoverable ? 'bg-[#FF5722] justify-end' : 'bg-gray-200 dark:bg-white/10 justify-start'}`}>
                         <div className="w-5 h-5 rounded-full bg-white shadow-sm"></div>
                     </div>
+                 </div>
+                 <div 
+                    onClick={() => setCurrentView('export-wallet')}
+                    className="p-5 flex items-center justify-between border-b border-black/5 dark:border-white/5 cursor-pointer active:bg-black/5 dark:active:bg-white/5 transition-colors"
+                 >
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                            <Key size={20} />
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="font-medium text-gray-900 dark:text-white">Export Wallet</span>
+                            <span className="text-xs text-gray-500 dark:text-white/40">Backup private keys</span>
+                        </div>
+                    </div>
+                    <ChevronRight size={18} className="text-gray-400 dark:text-white/20" />
+                 </div>
+            </GlassCard>
+        </div>
+
+        <div className="flex flex-col gap-2 mt-4">
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-white/40 ml-2 uppercase tracking-wider">Danger Zone</h3>
+            <GlassCard noPadding className="flex flex-col">
+                 <div 
+                    onClick={() => setCurrentView('delete-account')}
+                    className="p-5 flex items-center justify-between cursor-pointer active:bg-red-50 dark:active:bg-red-500/10 transition-colors"
+                 >
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-500/20 flex items-center justify-center text-red-600 dark:text-red-400">
+                            <Trash2 size={20} />
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="font-medium text-red-600 dark:text-red-400">Delete Account</span>
+                            <span className="text-xs text-gray-500 dark:text-white/40">Disable for 30 days</span>
+                        </div>
+                    </div>
+                    <ChevronRight size={18} className="text-gray-400 dark:text-white/20" />
                  </div>
             </GlassCard>
         </div>
@@ -912,6 +1026,255 @@ const Settings: React.FC<SettingsProps> = ({ initialView = 'main', selectedCurre
     </div>
   );
 
+  const renderExportWallet = () => (
+      <div className="animate-fade-in flex flex-col gap-6 h-full relative">
+          {renderHeader('Export Wallet', () => setCurrentView('security'))}
+
+          <div className="flex flex-col items-center justify-center flex-1 pb-20">
+              <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center mb-6">
+                  <Key size={32} className="text-blue-500" />
+              </div>
+              
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                  {showPrivateKey ? 'Your Private Key' : 'Export Wallet'}
+              </h2>
+              <p className="text-gray-500 dark:text-white/50 text-center text-sm mb-8 px-8">
+                  {showPrivateKey 
+                    ? 'Keep this safe! Anyone with this key can access your funds.' 
+                    : 'Enter your PIN to reveal your private key for backup.'}
+              </p>
+
+              {showPrivateKey ? (
+                  <>
+                      <div className="w-full max-w-md bg-yellow-500/10 border border-yellow-500/20 rounded-2xl p-4 mb-6">
+                          <div className="flex items-start gap-3">
+                              <AlertTriangle size={20} className="text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+                              <div className="flex flex-col gap-1">
+                                  <p className="text-sm font-semibold text-yellow-700 dark:text-yellow-300">Security Warning</p>
+                                  <p className="text-xs text-yellow-600 dark:text-yellow-400 leading-relaxed">
+                                      Never share your private key with anyone. Store it securely offline. PayMe will never ask for your private key.
+                                  </p>
+                              </div>
+                          </div>
+                      </div>
+
+                      <div className="w-full max-w-md bg-white dark:bg-white/5 rounded-2xl p-6 border border-black/5 dark:border-white/10 mb-6">
+                          <div className="flex flex-col gap-3">
+                              <span className="text-xs text-gray-500 dark:text-white/40 uppercase tracking-wide">Private Key</span>
+                              <div className="font-mono text-sm text-gray-900 dark:text-white break-all bg-gray-100 dark:bg-white/5 p-4 rounded-xl">
+                                  {privateKeyData}
+                              </div>
+                          </div>
+                      </div>
+
+                      <div className="flex gap-3 w-full max-w-md">
+                          <button 
+                              onClick={() => {
+                                  navigator.clipboard.writeText(privateKeyData);
+                                  alert('Private key copied to clipboard!');
+                              }}
+                              className="flex-1 py-4 rounded-[24px] bg-blue-500 text-white font-bold text-lg shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all"
+                          >
+                              Copy Key
+                          </button>
+                          <button 
+                              onClick={() => {
+                                  setShowPrivateKey(false);
+                                  setPrivateKeyData('');
+                                  setExportPin('');
+                                  setCurrentView('security');
+                              }}
+                              className="flex-1 py-4 rounded-[24px] bg-gray-200 dark:bg-white/10 text-gray-900 dark:text-white font-bold text-lg active:scale-[0.98] transition-all"
+                          >
+                              Done
+                          </button>
+                      </div>
+                  </>
+              ) : (
+                  <>
+                      <div className="relative mb-8">
+                        <input 
+                            type="tel"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={4}
+                            value={exportPin}
+                            onChange={(e) => {
+                                const val = e.target.value.replace(/[^0-9]/g, '');
+                                setExportPin(val);
+                            }}
+                            className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                            autoFocus
+                        />
+                        <div className="flex gap-4 justify-center">
+                            {[0, 1, 2, 3].map((i) => (
+                                <div 
+                                    key={i} 
+                                    className={`w-12 h-16 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-all
+                                        ${exportPin[i] 
+                                            ? 'border-blue-500 bg-blue-500/10 text-blue-500' 
+                                            : 'border-gray-200 dark:border-white/10 text-gray-400 dark:text-white/20'}`}
+                                >
+                                    {exportPin[i] ? '•' : ''}
+                                </div>
+                            ))}
+                        </div>
+                      </div>
+
+                      {exportError && (
+                          <div className="mb-4 text-red-500 text-sm font-medium animate-pulse">
+                              {exportError}
+                          </div>
+                      )}
+
+                      <button 
+                          onClick={handleExportWallet}
+                          disabled={exportPin.length !== 4}
+                          className="w-full max-w-xs py-4 rounded-[24px] bg-blue-500 disabled:bg-gray-200 dark:disabled:bg-white/10 disabled:text-gray-400 text-white font-bold text-lg shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all"
+                      >
+                          Export Wallet
+                      </button>
+                  </>
+              )}
+          </div>
+      </div>
+  );
+
+  const renderDeleteAccount = () => (
+      <div className="animate-fade-in flex flex-col gap-6 h-full relative">
+          {renderHeader('Delete Account', () => setCurrentView('security'))}
+
+          <div className="flex flex-col items-center justify-center flex-1 pb-20">
+              {deleteStep === 'success' ? (
+                  <>
+                      <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center mb-6 animate-bounce">
+                          <Check size={32} className="text-white" />
+                      </div>
+                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Account Disabled</h2>
+                      <p className="text-gray-500 dark:text-white/50 text-center text-sm mb-8 px-8">
+                          Your account has been disabled. You have 30 days to reinstate it before permanent deletion.
+                      </p>
+                  </>
+              ) : (
+                  <>
+                      <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-6">
+                          <Trash2 size={32} className="text-red-500" />
+                      </div>
+                      
+                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                          {deleteStep === 'confirm' ? 'Delete Account?' : 'Verify PIN'}
+                      </h2>
+                      <p className="text-gray-500 dark:text-white/50 text-center text-sm mb-8 px-8">
+                          {deleteStep === 'confirm' 
+                            ? 'Your account will be disabled for 30 days. You can reinstate within this period.' 
+                            : deleteStep === 'processing'
+                            ? 'Processing your request...'
+                            : 'Enter your PIN to confirm account deletion.'}
+                      </p>
+
+                      {deleteStep === 'confirm' && (
+                          <>
+                              <div className="w-full max-w-md bg-red-500/10 border border-red-500/20 rounded-2xl p-4 mb-6">
+                                  <div className="flex items-start gap-3">
+                                      <AlertTriangle size={20} className="text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                                      <div className="flex flex-col gap-2">
+                                          <p className="text-sm font-semibold text-red-700 dark:text-red-300">Important Information</p>
+                                          <ul className="text-xs text-red-600 dark:text-red-400 leading-relaxed space-y-1">
+                                              <li>• Account disabled for 30 days</li>
+                                              <li>• You can reinstate within 30 days</li>
+                                              <li>• 2-hour cooldown after reinstatement</li>
+                                              <li>• Account goes offline (not discoverable)</li>
+                                              <li>• Permanent deletion after 30 days</li>
+                                          </ul>
+                                      </div>
+                                  </div>
+                              </div>
+
+                              <div className="w-full max-w-md mb-6">
+                                  <input 
+                                      type="text"
+                                      value={deleteConfirmText}
+                                      onChange={(e) => setDeleteConfirmText(e.target.value)}
+                                      placeholder='Type "delete" to confirm'
+                                      className="w-full bg-white dark:bg-white/5 border border-red-500/20 rounded-2xl py-4 px-4 text-gray-900 dark:text-white outline-none focus:border-red-500 transition-colors text-center"
+                                      autoFocus
+                                  />
+                              </div>
+
+                              {deleteError && (
+                                  <div className="mb-4 text-red-500 text-sm font-medium animate-pulse">
+                                      {deleteError}
+                                  </div>
+                              )}
+
+                              <button 
+                                  onClick={handleDeleteAccount}
+                                  className="w-full max-w-xs py-4 rounded-[24px] bg-red-500 text-white font-bold text-lg shadow-lg shadow-red-500/20 active:scale-[0.98] transition-all"
+                              >
+                                  Continue
+                              </button>
+                          </>
+                      )}
+
+                      {deleteStep === 'verify-pin' && (
+                          <>
+                              <div className="relative mb-8">
+                                <input 
+                                    type="tel"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    maxLength={4}
+                                    value={deletePin}
+                                    onChange={(e) => {
+                                        const val = e.target.value.replace(/[^0-9]/g, '');
+                                        setDeletePin(val);
+                                    }}
+                                    className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                                    autoFocus
+                                />
+                                <div className="flex gap-4 justify-center">
+                                    {[0, 1, 2, 3].map((i) => (
+                                        <div 
+                                            key={i} 
+                                            className={`w-12 h-16 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-all
+                                                ${deletePin[i] 
+                                                    ? 'border-red-500 bg-red-500/10 text-red-500' 
+                                                    : 'border-gray-200 dark:border-white/10 text-gray-400 dark:text-white/20'}`}
+                                        >
+                                            {deletePin[i] ? '•' : ''}
+                                        </div>
+                                    ))}
+                                </div>
+                              </div>
+
+                              {deleteError && (
+                                  <div className="mb-4 text-red-500 text-sm font-medium animate-pulse">
+                                      {deleteError}
+                                  </div>
+                              )}
+
+                              <button 
+                                  onClick={handleDeleteAccount}
+                                  disabled={deletePin.length !== 4}
+                                  className="w-full max-w-xs py-4 rounded-[24px] bg-red-500 disabled:bg-gray-200 dark:disabled:bg-white/10 disabled:text-gray-400 text-white font-bold text-lg shadow-lg shadow-red-500/20 active:scale-[0.98] transition-all"
+                              >
+                                  Delete Account
+                              </button>
+                          </>
+                      )}
+
+                      {deleteStep === 'processing' && (
+                          <div className="flex items-center gap-2">
+                              <Loader2 className="animate-spin text-gray-400" />
+                              <span className="text-gray-500 dark:text-white/50">Processing...</span>
+                          </div>
+                      )}
+                  </>
+              )}
+          </div>
+      </div>
+  );
+
   return (
     <div className="px-4 pt-4 pb-32 h-full overflow-y-auto no-scrollbar">
         {currentView === 'main' && renderMainView()}
@@ -919,6 +1282,8 @@ const Settings: React.FC<SettingsProps> = ({ initialView = 'main', selectedCurre
         {currentView === 'account' && renderAccountInfo()}
         {currentView === 'security' && renderSecurity()}
         {currentView === 'change-pin' && renderChangePin()}
+        {currentView === 'export-wallet' && renderExportWallet()}
+        {currentView === 'delete-account' && renderDeleteAccount()}
         {currentView === 'appearance' && renderAppearance()}
         {currentView === 'help' && renderHelp()}
         {currentView === 'privacy' && renderPrivacyPolicy()}

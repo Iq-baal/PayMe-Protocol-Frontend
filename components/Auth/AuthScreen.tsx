@@ -1,133 +1,220 @@
+/**
+ * Passwordless Auth Screen
+ * Flow: Email → OTP Code → Success
+ */
+
 import React, { useState } from 'react';
-import Login from './Login';
-import SignUp from './SignUp';
-import AppLogo from '../AppLogo';
-import { ArrowRight, Play } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { Mail, ArrowRight, Loader2, CheckCircle } from 'lucide-react';
+import { logger } from '../../utils/logger';
 
 const AuthScreen: React.FC = () => {
-  const [showLanding, setShowLanding] = useState(true);
-  // Default to 'signup' when coming from the "Start Paying" landing page
-  const [mode, setMode] = useState<'signup' | 'login'>('signup'); 
+  const { sendOTPCode, verifyOTP } = useAuth();
+  
+  const [step, setStep] = useState<'email' | 'code' | 'success'>('email');
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  if (showLanding) {
-      return (
-        <div className="flex flex-col h-full bg-[#0f0b1e] relative overflow-hidden font-sans selection:bg-orange-500/30">
-            {/* Pretty lights to distract from the loading time. */}
-            <div className="absolute top-[-10%] right-[-10%] w-[70%] h-[70%] bg-[#673AB7] rounded-full mix-blend-screen filter blur-[100px] opacity-10 pointer-events-none animate-pulse-slow"></div>
-            <div className="absolute bottom-[-10%] left-[-10%] w-[70%] h-[70%] bg-[#FF5722] rounded-full mix-blend-screen filter blur-[100px] opacity-10 pointer-events-none animate-pulse-slow"></div>
+  const handleSendCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
 
-            <div className="relative z-10 flex flex-col h-full px-8 pt-12 pb-8 justify-between">
-                
-                {/* Top: Logo */}
-                <div className="flex justify-start pt-4">
-                    <div className="w-20 h-20 transform hover:scale-105 transition-transform duration-500">
-                        <AppLogo />
-                    </div>
-                </div>
+    try {
+      const result = await sendOTPCode(email);
+      
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setStep('code');
+        logger.log('OTP code sent to', email);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to send code');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-                {/* Middle: Typography */}
-                <div className="flex flex-col gap-0 mt-auto mb-auto pt-8">
-                    <h1 className="text-6xl font-black tracking-tighter text-[#FF5722] leading-[0.95] mb-2 drop-shadow-lg">
-                        PayMe.
-                    </h1>
-                    <h1 className="text-6xl font-black tracking-tighter text-white leading-[0.95] mb-2 drop-shadow-lg">
-                        Instant.
-                    </h1>
-                    <h1 className="text-6xl font-black tracking-tighter text-[#673AB7] leading-[0.95] mb-6 drop-shadow-lg">
-                        Global.
-                    </h1>
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
 
-                    <p className="text-gray-400 text-lg font-medium max-w-[260px] leading-relaxed mt-2">
-                        Experience the future of borderless payments.
-                    </p>
-                </div>
-
-                {/* Bottom: Buttons & Footer */}
-                <div className="w-full flex flex-col gap-4 animate-slide-up">
-                    <button 
-                        onClick={() => setShowLanding(false)}
-                        className="w-full py-4 rounded-full bg-[#FF5722] text-white font-bold text-lg shadow-lg shadow-orange-500/20 hover:bg-[#e64a19] active:scale-[0.98] transition-all"
-                    >
-                        Start paying
-                    </button>
-                    
-                    <button 
-                        className="w-full py-4 rounded-full bg-[#1c1c1e]/50 border border-white/10 text-white font-bold text-sm hover:bg-white/5 active:scale-[0.98] transition-all tracking-widest uppercase flex items-center justify-center gap-2 backdrop-blur-sm"
-                    >
-                        Watch Trailer
-                    </button>
-                    
-                    <div className="mt-6 text-center">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-600">
-                            Secure Protocol V1.2 • Welcome Bonus $10K
-                        </p>
-                    </div>
-                </div>
-            </div>
-            
-             <style>{`
-                @keyframes fade-in {
-                    from { opacity: 0; transform: scale(0.95); }
-                    to { opacity: 1; transform: scale(1); }
-                }
-                .animate-fade-in {
-                    animation: fade-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-                }
-                @keyframes pulse-slow {
-                    0%, 100% { opacity: 0.1; transform: scale(1); }
-                    50% { opacity: 0.15; transform: scale(1.05); }
-                }
-                .animate-pulse-slow {
-                    animation: pulse-slow 8s infinite ease-in-out;
-                }
-            `}</style>
-        </div>
-      );
-  }
+    try {
+      const result = await verifyOTP(email, code);
+      
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setStep('success');
+        logger.log('Code verified successfully');
+        // AuthContext will handle navigation to onboarding
+      }
+    } catch (err: any) {
+      setError(err.message || 'Invalid code');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="flex flex-col h-full bg-[#F2F2F7] dark:bg-[#0f0b1e] relative overflow-hidden transition-colors duration-300">
-      {/* Background Ambient Glows */}
-      <div className="absolute top-[-20%] left-[-20%] w-[80%] h-[60%] bg-[#673AB7] rounded-full mix-blend-screen filter blur-[100px] opacity-20 animate-pulse-slow pointer-events-none"></div>
-      <div className="absolute bottom-[-20%] right-[-20%] w-[80%] h-[60%] bg-[#FF5722] rounded-full mix-blend-screen filter blur-[100px] opacity-20 animate-pulse-slow pointer-events-none"></div>
+    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#0f0b1e] via-[#1a1333] to-[#0f0b1e] text-white px-6 relative overflow-hidden">
+      {/* Background Effects */}
+      <div className="absolute top-[-10%] left-[-20%] w-[80%] h-[60%] bg-[#673AB7] rounded-full mix-blend-screen filter blur-[120px] opacity-20 animate-pulse-slow"></div>
+      <div className="absolute bottom-[-10%] right-[-20%] w-[80%] h-[60%] bg-[#FF5722] rounded-full mix-blend-screen filter blur-[120px] opacity-20 animate-pulse-slow"></div>
 
-      <div className="relative z-10 flex flex-col h-full">
-        
-        {/* iOS Style Slider Control */}
-        <div className="w-full px-6 pt-12 pb-2 z-20">
-            <div className="relative w-full h-14 bg-gray-200 dark:bg-white/5 rounded-full p-1 flex shadow-inner border border-black/5 dark:border-white/5 backdrop-blur-md">
-                {/* Sliding Indicator */}
-                <div 
-                className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-[#FF5722] rounded-full shadow-md transition-all duration-300 ease-spring ${mode === 'signup' ? 'left-1' : 'left-[calc(50%+4px)]'}`}
-                ></div>
-                
-                <button 
-                onClick={() => setMode('signup')}
-                className={`flex-1 relative z-10 flex items-center justify-center gap-2 font-bold text-sm tracking-wide transition-colors duration-200 ${mode === 'signup' ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-white/40'}`}
-                >
-                Sign Up
-                </button>
-                <button 
-                onClick={() => setMode('login')}
-                className={`flex-1 relative z-10 flex items-center justify-center gap-2 font-bold text-sm tracking-wide transition-colors duration-200 ${mode === 'login' ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-white/40'}`}
-                >
-                Sign In
-                </button>
+      <div className="relative z-10 w-full max-w-md">
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-12">
+          <div className="w-20 h-20 bg-gradient-to-br from-[#FF5722] to-[#673AB7] rounded-3xl flex items-center justify-center mb-4 shadow-2xl">
+            <span className="text-4xl font-bold">₱</span>
+          </div>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
+            PayMe
+          </h1>
+          <p className="text-white/50 mt-2">Send money with just a username</p>
+        </div>
+
+        {/* Email Step */}
+        {step === 'email' && (
+          <form onSubmit={handleSendCode} className="space-y-6 animate-fade-in">
+            <div>
+              <label className="block text-sm font-medium text-white/70 mb-2">
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" size={20} />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-white/30 focus:outline-none focus:border-[#FF5722] transition-all"
+                  required
+                  autoFocus
+                />
+              </div>
             </div>
-        </div>
 
-        {/* Content Container */}
-        <div className="flex-1 relative overflow-y-auto">
-           {mode === 'signup' ? (
-               <SignUp onToggleMode={() => setMode('login')} />
-           ) : (
-               <Login onToggleMode={() => setMode('signup')} />
-           )}
-        </div>
+            {error && (
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || !email}
+              className="w-full py-4 bg-gradient-to-r from-[#FF5722] to-[#FF7043] rounded-2xl font-bold text-white flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-[#FF5722]/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="animate-spin" size={20} />
+                  Sending Code...
+                </>
+              ) : (
+                <>
+                  Continue
+                  <ArrowRight size={20} />
+                </>
+              )}
+            </button>
+
+            <p className="text-center text-white/40 text-sm">
+              We'll send you a 6-digit code to verify your email
+            </p>
+          </form>
+        )}
+
+        {/* Code Verification Step */}
+        {step === 'code' && (
+          <form onSubmit={handleVerifyCode} className="space-y-6 animate-fade-in">
+            <div>
+              <label className="block text-sm font-medium text-white/70 mb-2">
+                Verification Code
+              </label>
+              <p className="text-white/50 text-sm mb-4">
+                Enter the 6-digit code sent to {email}
+              </p>
+              <input
+                type="text"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="000000"
+                className="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-2xl text-white text-center text-2xl tracking-widest placeholder-white/30 focus:outline-none focus:border-[#FF5722] transition-all"
+                inputMode="numeric"
+                maxLength={6}
+                required
+                autoFocus
+              />
+            </div>
+
+            {error && (
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || code.length !== 6}
+              className="w-full py-4 bg-gradient-to-r from-[#FF5722] to-[#FF7043] rounded-2xl font-bold text-white flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-[#FF5722]/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="animate-spin" size={20} />
+                  Verifying...
+                </>
+              ) : (
+                <>
+                  Verify Code
+                  <ArrowRight size={20} />
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setStep('email')}
+              className="w-full py-3 text-white/50 hover:text-white transition-colors text-sm"
+            >
+              Use different email
+            </button>
+          </form>
+        )}
+
+        {/* Success Step */}
+        {step === 'success' && (
+          <div className="text-center space-y-6 animate-fade-in">
+            <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto">
+              <CheckCircle className="text-green-400" size={40} />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold mb-2">Verified!</h2>
+              <p className="text-white/50">Setting up your account...</p>
+            </div>
+            <Loader2 className="animate-spin text-[#FF5722] mx-auto" size={32} />
+          </div>
+        )}
       </div>
-       <style>{`
-        .ease-spring {
-            transition-timing-function: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+      <style>{`
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.3s ease-out forwards;
+        }
+        @keyframes pulse-slow {
+          0%, 100% { opacity: 0.2; transform: scale(1); }
+          50% { opacity: 0.15; transform: scale(1.05); }
+        }
+        .animate-pulse-slow {
+          animation: pulse-slow 8s infinite ease-in-out;
         }
       `}</style>
     </div>
